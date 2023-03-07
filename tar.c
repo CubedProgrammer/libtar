@@ -1,5 +1,31 @@
+#include<stdio.h>
 #include<string.h>
 #include"tar.h"
+int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, unsigned cnt)
+{
+    return fread(dat, 1, cnt, (FILE*)src);
+}
+int tar_read(FILE *src, struct tar_header *head)
+{
+    union tar_header_data dat;
+    int succ = tar_read_raw(src, &dat);
+    if(succ == 0)
+        succ = tar_rtoh(head, &dat);
+    return succ;
+}
+int tar_read_raw(FILE *src, union tar_header_data *dat)
+{
+    return tar_read_generic((void*)src, dat, tar_read_stdc_file_handle_helper);
+}
+int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, int(*reader)(void *restrict src, void *restrict dat, unsigned cnt))
+{
+    int succ = 0;
+    unsigned tot = 0;
+    for(int bcnt = reader(src, dat->raw, TAR_HEADER_SIZE); bcnt > 0 && tot < TAR_HEADER_SIZE; tot += bcnt = reader(src, dat->raw + tot, TAR_HEADER_SIZE));
+    if(tot < TAR_HEADER_SIZE)
+        succ = -1;
+    return succ;
+}
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src)
 {
     dest->header.type = src->type;

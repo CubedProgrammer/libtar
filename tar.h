@@ -1,6 +1,6 @@
 #ifndef Included_tar_h
 #define Included_tar_h
-#define HEADER_SIZE 512
+#define TAR_HEADER_SIZE 512
 
 struct tar_header
 {
@@ -35,9 +35,12 @@ struct tar_header_entry
 union tar_header_data
 {
     struct tar_header_entry header;
-    char raw[HEADER_SIZE];
+    char raw[TAR_HEADER_SIZE];
 };
 
+int tar_read(FILE *src, struct tar_header *head);
+int tar_read_raw(FILE *src, union tar_header_data *dat);
+int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, int(*reader)(void *restrict src, void *restrict dat, unsigned cnt));
 // header to raw and raw to header
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src);
 int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *restrict src);
