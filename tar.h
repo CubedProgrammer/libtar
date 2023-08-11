@@ -41,6 +41,9 @@ union tar_header_data
 int tar_read(FILE *src, struct tar_header *head);
 int tar_read_raw(FILE *src, union tar_header_data *dat);
 int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, int(*reader)(void *restrict src, void *restrict dat, unsigned cnt));
+int tar_write(FILE *dest, const struct tar_header *head);
+int tar_write_raw(FILE *dest, const union tar_header_data *dat);
+int tar_write_generic(void *restrict dest, const union tar_header_data *restrict dat, int(*writeer)(void *restrict dest, const void *restrict dat, unsigned cnt));
 // header to raw and raw to header
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src);
 int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *restrict src);

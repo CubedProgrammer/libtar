@@ -5,6 +5,10 @@ int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, uns
 {
     return fread(dat, 1, cnt, (FILE*)src);
 }
+int tar_write_stdc_file_handle_helper(void *restrict dest, const void *restrict dat, unsigned cnt)
+{
+    return fwrite(dat, 1, cnt, (FILE*)dest);
+}
 int tar_read(FILE *src, struct tar_header *head)
 {
     union tar_header_data dat;
@@ -21,10 +25,26 @@ int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, in
 {
     int succ = 0;
     unsigned tot = 0;
-    for(int bcnt = reader(src, dat->raw, TAR_HEADER_SIZE); bcnt > 0 && tot < TAR_HEADER_SIZE; tot += bcnt = reader(src, dat->raw + tot, TAR_HEADER_SIZE));
+    for(int bcnt = reader(src, dat->raw, TAR_HEADER_SIZE); bcnt > 0 && tot < TAR_HEADER_SIZE; tot += bcnt = reader(src, dat->raw + tot, TAR_HEADER_SIZE - tot));
     if(tot < TAR_HEADER_SIZE)
         succ = -1;
     return succ;
+}
+int tar_write(FILE *dest, const struct tar_header *head)
+{
+    union tar_header_data dat;
+    int succ = tar_htor(&dat, head);
+    if(succ == 0)
+        succ = tar_write_raw(dest, &dat);
+    return succ;
+}
+int tar_write_raw(FILE *dest, const union tar_header_data *dat)
+{
+    return tar_write_generic(dest, dat, tar_write_stdc_file_handle_helper);
+}
+int tar_write_generic(void *restrict dest, const union tar_header_data *restrict dat, int(*writer)(void *restrict dest, const void *restrict dat, unsigned cnt))
+{
+    return writer(dest, dat->raw, TAR_HEADER_SIZE) < TAR_HEADER_SIZE;
 }
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src)
 {
