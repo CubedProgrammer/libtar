@@ -25,7 +25,8 @@ int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, in
 {
     int succ = 0;
     unsigned tot = 0;
-    for(int bcnt = reader(src, dat->raw, TAR_HEADER_SIZE); bcnt > 0 && tot < TAR_HEADER_SIZE; tot += bcnt = reader(src, dat->raw + tot, TAR_HEADER_SIZE - tot));
+    int bcnt;
+    for(tot = bcnt = reader(src, dat->raw, TAR_HEADER_SIZE); bcnt > 0 && tot < TAR_HEADER_SIZE; tot += bcnt = reader(src, dat->raw + tot, TAR_HEADER_SIZE - tot));
     if(tot < TAR_HEADER_SIZE)
         succ = -1;
     return succ;
@@ -71,6 +72,8 @@ int tar_htor(union tar_header_data *restrict dest, const struct tar_header *rest
     memcpy(dest->header.user, src->user, sizeof(dest->header.user));
     memcpy(dest->header.group, src->group, sizeof(dest->header.group));
     memcpy(dest->header.ver, src->ver, sizeof(dest->header.ver));
+    strcpy(dest->header.zzzzzzustar, "ustar");
+    dest->header.zzzzzzspace = ' ';
     return 0;
 }
 int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *restrict src)
@@ -98,5 +101,11 @@ int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *rest
     memcpy(dest->user, src->header.user, sizeof(src->header.user));
     memcpy(dest->group, src->header.group, sizeof(src->header.group));
     memcpy(dest->ver, src->header.ver, sizeof(src->header.ver));
+    dest->name[sizeof(src->header.name)] = '\0';
+    dest->lnk[sizeof(src->header.lnk)] = '\0';
+    dest->fpref[sizeof(src->header.fpref)] = '\0';
+    dest->user[sizeof(src->header.user)] = '\0';
+    dest->group[sizeof(src->header.group)] = '\0';
+    dest->ver[sizeof(src->header.ver)] = '\0';
     return 0;
 }
