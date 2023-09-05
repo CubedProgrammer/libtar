@@ -4,8 +4,7 @@
 
 struct tar_header
 {
-    char name[101], lnk[101];
-    char fpref[157];
+    char name[257], lnk[101];
     char user[33], group[33];
     char ver[3];
     char type;
