@@ -9,7 +9,7 @@ struct tar_header
     char user[33], group[33];
     char ver[3];
     char type;
-    int mode, checksum;
+    int mode;
     long size, modify;
     int uid, gid;
     int devmajor, devminor;
@@ -30,6 +30,7 @@ struct tar_header_entry
     char user[32], group[32];
     char devmajor[8], devminor[8];
     char fpref[155];
+    char blank[12];
 };
 
 union tar_header_data

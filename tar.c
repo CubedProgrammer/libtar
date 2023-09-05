@@ -23,12 +23,15 @@ int tar_read_raw(FILE *src, union tar_header_data *dat)
 }
 int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, int(*reader)(void *restrict src, void *restrict dat, unsigned cnt))
 {
-    int succ = 0;
+    int succ = -1;
     unsigned tot = 0;
     int bcnt;
     for(tot = bcnt = reader(src, dat->raw, TAR_HEADER_SIZE); bcnt > 0 && tot < TAR_HEADER_SIZE; tot += bcnt = reader(src, dat->raw + tot, TAR_HEADER_SIZE - tot));
-    if(tot < TAR_HEADER_SIZE)
-        succ = -1;
+    if(tot == TAR_HEADER_SIZE)
+    {
+        for(unsigned i = 0; succ == -1 && i < tot; ++i)
+            succ = (!dat->raw[i]) * -1;
+    }
     return succ;
 }
 int tar_write(FILE *dest, const struct tar_header *head)
@@ -49,23 +52,22 @@ int tar_write_generic(void *restrict dest, const union tar_header_data *restrict
 }
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src)
 {
+    int checksum = 0;
     dest->header.type = src->type;
+    for(unsigned i = 0; i < sizeof(dest->header.mode) - 1; ++i)dest->header.mode[i] = (src->mode >> (sizeof(dest->header.mode) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.size) - 1; ++i)dest->header.size[i] = (src->size >> (sizeof(dest->header.size) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.uid) - 1; ++i)dest->header.uid[i] = (src->uid >> (sizeof(dest->header.uid) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.gid) - 1; ++i)dest->header.gid[i] = (src->gid >> (sizeof(dest->header.gid) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.modify) - 1; ++i)dest->header.modify[i] = (src->modify >> (sizeof(dest->header.modify) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.devmajor) - 1; ++i)dest->header.devmajor[i] = (src->devmajor >> (sizeof(dest->header.devmajor) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.devminor) - 1; ++i)dest->header.devminor[i] = (src->devminor >> (sizeof(dest->header.devminor) - 2 - i) * 3 & 7) + '0';
     dest->header.mode[sizeof(dest->header.mode) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.mode) - 1; ++i)dest->header.mode[i] = src->mode >> (sizeof(dest->header.mode) - 2 - i) * 3 & 7;
     dest->header.size[sizeof(dest->header.size) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.size) - 1; ++i)dest->header.size[i] = src->size >> (sizeof(dest->header.size) - 2 - i) * 3 & 7;
     dest->header.uid[sizeof(dest->header.uid) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.uid) - 1; ++i)dest->header.uid[i] = src->uid >> (sizeof(dest->header.uid) - 2 - i) * 3 & 7;
     dest->header.gid[sizeof(dest->header.gid) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.gid) - 1; ++i)dest->header.gid[i] = src->gid >> (sizeof(dest->header.gid) - 2 - i) * 3 & 7;
     dest->header.modify[sizeof(dest->header.modify) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.modify) - 1; ++i)dest->header.modify[i] = src->modify >> (sizeof(dest->header.modify) - 2 - i) * 3 & 7;
-    dest->header.checksum[sizeof(dest->header.checksum) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.checksum) - 1; ++i)dest->header.checksum[i] = src->checksum >> (sizeof(dest->header.checksum) - 2 - i) * 3 & 7;
     dest->header.devmajor[sizeof(dest->header.devmajor) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.devmajor) - 1; ++i)dest->header.devmajor[i] = src->devmajor >> (sizeof(dest->header.devmajor) - 2 - i) * 3 & 7;
     dest->header.devminor[sizeof(dest->header.devminor) - 1] = '\0';
-    for(unsigned i = 0; i < sizeof(dest->header.devminor) - 1; ++i)dest->header.devminor[i] = src->devminor >> (sizeof(dest->header.devminor) - 2 - i) * 3 & 7;
     memcpy(dest->header.name, src->name, sizeof(dest->header.name));
     memcpy(dest->header.lnk, src->lnk, sizeof(dest->header.lnk));
     memcpy(dest->header.fpref, src->fpref, sizeof(dest->header.fpref));
@@ -74,6 +76,12 @@ int tar_htor(union tar_header_data *restrict dest, const struct tar_header *rest
     memcpy(dest->header.ver, src->ver, sizeof(dest->header.ver));
     strcpy(dest->header.zzzzzzustar, "ustar");
     dest->header.zzzzzzspace = ' ';
+    memset(dest->header.blank, 0, sizeof(dest->header.blank));
+    memset(dest->header.checksum, ' ', sizeof(dest->header.checksum));
+    for(int i = 0; i < TAR_HEADER_SIZE; ++i)
+        checksum += (unsigned)dest->raw[i] & 0xff;
+    for(unsigned i = 0; i < sizeof(dest->header.checksum) - 1; ++i)dest->header.checksum[i] = (checksum >> (sizeof(dest->header.checksum) - 2 - i) * 3 & 7) + '0';
+    dest->header.checksum[sizeof(dest->header.checksum) - 1] = '\0';
     return 0;
 }
 int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *restrict src)
@@ -89,8 +97,6 @@ int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *rest
     for(unsigned i = 0; i < sizeof(src->header.gid) - 1; ++i)dest->gid = dest->gid << 3 | src->header.gid[i] - '0';
     dest->modify = 0;
     for(unsigned i = 0; i < sizeof(src->header.modify) - 1; ++i)dest->modify = dest->modify << 3 | src->header.modify[i] - '0';
-    dest->checksum = 0;
-    for(unsigned i = 0; i < sizeof(src->header.checksum) - 1; ++i)dest->checksum = dest->checksum << 3 | src->header.checksum[i] - '0';
     dest->devmajor = 0;
     for(unsigned i = 0; i < sizeof(src->header.devmajor) - 1; ++i)dest->devmajor = dest->devmajor << 3 | src->header.devmajor[i] - '0';
     dest->devminor = 0;
