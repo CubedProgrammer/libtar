@@ -50,6 +50,16 @@ int tar_write_generic(void *restrict dest, const union tar_header_data *restrict
 {
     return writer(dest, dat->raw, TAR_HEADER_SIZE) < TAR_HEADER_SIZE;
 }
+int tar_end_archive(FILE *fh)
+{
+    return tar_end_archive_generic(fh, tar_write_stdc_file_handle_helper);
+}
+int tar_end_archive_generic(void *restrict dest, int(*writer)(void *restrict dest, const void *restrict dat, unsigned cnt))
+{
+    char cbuf[TAR_HEADER_SIZE];
+    memset(cbuf, 0, sizeof cbuf);
+    return writer(dest, cbuf, sizeof cbuf) + writer(dest, cbuf, sizeof cbuf) < TAR_HEADER_SIZE * 2;
+}
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src)
 {
     int checksum = 0;
