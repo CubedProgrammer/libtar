@@ -1,4 +1,3 @@
-#include<stdio.h>
 #include<string.h>
 #include"tar.h"
 int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, unsigned cnt)
@@ -8,6 +7,10 @@ int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, uns
 int tar_write_stdc_file_handle_helper(void *restrict dest, const void *restrict dat, unsigned cnt)
 {
     return fwrite(dat, 1, cnt, (FILE*)dest);
+}
+int tar_seek_std_file_handle_helper(void *obj, long offset, int origin)
+{
+    return fseek((FILE*)obj, offset, origin);
 }
 int tar_read(FILE *src, struct tar_header *head)
 {

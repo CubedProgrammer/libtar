@@ -1,5 +1,6 @@
 #ifndef Included_tar_h
 #define Included_tar_h
+#include<stdio.h>
 #define TAR_HEADER_SIZE 512
 
 struct tar_header
@@ -48,8 +49,13 @@ int tar_write_raw(FILE *dest, const union tar_header_data *dat);
 int tar_write_generic(void *restrict dest, const union tar_header_data *restrict dat, int(*writeer)(void *restrict dest, const void *restrict dat, unsigned cnt));
 int tar_end_archive(FILE *fh);
 int tar_end_archive_generic(void *restrict dest, int(*writer)(void *restrict dest, const void *restrict dat, unsigned cnt));
+size_t tar_all_headers(FILE *src, struct tar_header **arrp);
+size_t tar_all_headers_generic(void *restrict src, int(*reader)(void *restrict src, void *restrict dat, unsigned cnt), int(*seeker)(void *obj, long offset, int origin), struct tar_header **arrp);
 // header to raw and raw to header
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src);
 int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *restrict src);
+int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, unsigned cnt);
+int tar_write_stdc_file_handle_helper(void *restrict dest, const void *restrict dat, unsigned cnt);
+int tar_seek_std_file_handle_helper(void *obj, long offset, int origin);
 
 #endif
