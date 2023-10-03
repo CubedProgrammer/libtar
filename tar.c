@@ -1,3 +1,4 @@
+#include<errno.h>
 #include<string.h>
 #include"tar.h"
 int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, unsigned cnt)
@@ -35,6 +36,8 @@ int tar_read_generic(void *restrict src, union tar_header_data *restrict dat, in
         for(unsigned i = 0; succ == -1 && i < tot; ++i)
             succ = (!dat->raw[i]) * -1;
     }
+    else
+        errno = ENODATA;
     return succ;
 }
 int tar_write(FILE *dest, const struct tar_header *head)
