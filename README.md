@@ -1,5 +1,5 @@
 # libtar
-Tar library and command line tool
+Command line tool for managing tar files, and C library.
 ## Compilation
 With cxso from [linux\_utility](https://github.com/CubedProgrammer/linux_utility)
 ```
@@ -12,3 +12,11 @@ CC -O3 -c main.c tar.c utils.c
 cc -shared -o libtar.so /usr/lib/Scrt1.o main.o tar.o utils.o
 ```
 The exact location of Scrt1.o may not be /usr/lib on your computer, make sure you have the correct location.
+## Usage
+This program tries to be compatible with POSIX tar utility, so read the man page.
+However, not all features have been implemented.
+
+Options available are:
+```
+-c -f -t -x
+```
