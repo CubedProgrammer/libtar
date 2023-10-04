@@ -76,7 +76,7 @@ int tar_htor(union tar_header_data *restrict dest, const struct tar_header *rest
     for(unsigned i = 0; i < sizeof(dest->header.size) - 1; ++i)dest->header.size[i] = (src->size >> (sizeof(dest->header.size) - 2 - i) * 3 & 7) + '0';
     for(unsigned i = 0; i < sizeof(dest->header.uid) - 1; ++i)dest->header.uid[i] = (src->uid >> (sizeof(dest->header.uid) - 2 - i) * 3 & 7) + '0';
     for(unsigned i = 0; i < sizeof(dest->header.gid) - 1; ++i)dest->header.gid[i] = (src->gid >> (sizeof(dest->header.gid) - 2 - i) * 3 & 7) + '0';
-    for(unsigned i = 0; i < sizeof(dest->header.modify) - 1; ++i)dest->header.modify[i] = (src->modify >> (sizeof(dest->header.modify) - 2 - i) * 3 & 7) + '0';
+    for(unsigned i = 0; i < sizeof(dest->header.mtime) - 1; ++i)dest->header.mtime[i] = (src->mtime >> (sizeof(dest->header.mtime) - 2 - i) * 3 & 7) + '0';
     for(unsigned i = 0; i < sizeof(dest->header.devmajor) - 1; ++i)dest->header.devmajor[i] = (src->devmajor >> (sizeof(dest->header.devmajor) - 2 - i) * 3 & 7) + '0';
     for(unsigned i = 0; i < sizeof(dest->header.devminor) - 1; ++i)dest->header.devminor[i] = (src->devminor >> (sizeof(dest->header.devminor) - 2 - i) * 3 & 7) + '0';
     if(namlen > sizeof(dest->header.name))
@@ -111,8 +111,8 @@ int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *rest
     for(unsigned i = 0; i < sizeof(src->header.uid) - 1; ++i)dest->uid = dest->uid << 3 | src->header.uid[i] - '0';
     dest->gid = 0;
     for(unsigned i = 0; i < sizeof(src->header.gid) - 1; ++i)dest->gid = dest->gid << 3 | src->header.gid[i] - '0';
-    dest->modify = 0;
-    for(unsigned i = 0; i < sizeof(src->header.modify) - 1; ++i)dest->modify = dest->modify << 3 | src->header.modify[i] - '0';
+    dest->mtime = 0;
+    for(unsigned i = 0; i < sizeof(src->header.mtime) - 1; ++i)dest->mtime = dest->mtime << 3 | src->header.mtime[i] - '0';
     dest->devmajor = 0;
     for(unsigned i = 0; i < sizeof(src->header.devmajor) - 1; ++i)dest->devmajor = dest->devmajor << 3 | src->header.devmajor[i] - '0';
     dest->devminor = 0;

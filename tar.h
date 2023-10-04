@@ -2,6 +2,13 @@
 #define Included_tar_h
 #include<stdio.h>
 #define TAR_HEADER_SIZE 512
+#define TAR_REG '0'
+#define TAR_LNK '1'
+#define TAR_SYM '2'
+#define TAR_CHR '3'
+#define TAR_BLK '4'
+#define TAR_DIR '5'
+#define TAR_PIP '6'
 
 struct tar_header
 {
@@ -10,7 +17,7 @@ struct tar_header
     char ver[3];
     char type;
     int mode;
-    long size, modify;
+    long size, mtime;
     int uid, gid;
     int devmajor, devminor;
 };
@@ -21,7 +28,7 @@ struct tar_header_entry
     char mode[8];
     char uid[8], gid[8];
     char size[12];
-    char modify[12];
+    char mtime[12];
     char checksum[7];
     char zzzzzzspace, type;
     char lnk[100];
