@@ -1,11 +1,55 @@
+#include<dirent.h>
 #include<errno.h>
 #include<stdlib.h>
 #include<string.h>
 #include<sys/stat.h>
+#include<sys/sysmacros.h>
 #include"tar.h"
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
 enum operation
 {   LIST, CREATE, EXTRACT   };
+char self_or_parent_directory(const char *name)
+{
+    return name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
+}
+void recursive_directory_iterator(const char *dname, void(*callback)(void *arg, const char *dname), void *arg)
+{
+    DIR *handles[250];
+    char path[3601];
+    struct dirent *en;
+    unsigned depth = 1, pathlen = strlen(dname);
+    strcpy(path, dname);
+    handles[0] = opendir(dname);
+    path[pathlen] = '/';
+    ++pathlen;
+    while(depth)
+    {
+        errno = 0;
+        en = readdir(handles[depth - 1]);
+        if(en == NULL)
+        {
+            if(errno)
+                perror("readdir failed");
+            closedir(handles[depth - 1]);
+            --depth;
+            for(path[--pathlen] = '\0'; pathlen > 0 && path[pathlen] != '/'; --pathlen);
+            ++pathlen;
+        }
+        else if(!self_or_parent_directory(en->d_name))
+        {
+            strcpy(path + pathlen, en->d_name);
+            callback(arg, path);
+            if(en->d_type == DT_DIR)
+            {
+                pathlen += strlen(en->d_name);
+                handles[depth] = opendir(path);
+                path[pathlen] = '/';
+                ++pathlen;
+                ++depth;
+            }
+        }
+    }
+}
 void print_archive_entry(FILE *fh, const char *fmt, const struct tar_header *headerp)
 {
     fprintf(fh, fmt, headerp->name, headerp->size);
@@ -61,6 +105,67 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
     }
     return cnt;
 }
+int insert_entry(FILE *fh, const char *fname)
+{
+    struct tar_header head;
+    struct stat fdat;
+    size_t len;
+    char cbuf[TAR_HEADER_SIZE];
+    FILE *fin;
+    memset(&head, 0, sizeof head);
+    strcpy(head.name, fname);
+    strcpy(head.ver, "00");
+    stat(head.name, &fdat);
+    head.size = fdat.st_size;
+    head.mtime = fdat.st_mtime;
+    head.uid = fdat.st_uid;
+    head.gid = fdat.st_gid;
+    head.mode = fdat.st_mode;
+    head.devmajor = major(fdat.st_dev);
+    head.devminor = minor(fdat.st_dev);
+    if(S_ISREG(fdat.st_mode))
+    {
+        head.type = TAR_REG;
+        fin = fopen(head.name, "r");
+    }
+    else if(S_ISDIR(fdat.st_mode))
+    {
+        head.type = TAR_DIR;
+        head.size = 0;
+        len = strlen(head.name);
+        if(head.name[len - 1] != '/')
+            head.name[len] = '/';
+    }
+    tar_write(fh, &head);
+    if(head.type == TAR_REG)
+    {
+        if(fin == NULL)
+        {
+            fprintf(stderr, "Opening file %s", head.name);
+            perror(" failed");
+        }
+        else
+        {
+            len = TAR_HEADER_SIZE;
+            while(!feof(fin) && len == TAR_HEADER_SIZE)
+            {
+                len = fread(cbuf, 1, TAR_HEADER_SIZE, fin);
+                fwrite(cbuf, 1, len, fh);
+            }
+            if(len < TAR_HEADER_SIZE)
+            {
+                memset(cbuf, 0, -len & 0x1ff);
+                fwrite(cbuf, 1, -len & 0x1ff, fh);
+            }
+            fclose(fin);
+        }
+    }
+    return head.type == TAR_DIR;
+}
+void insert_iterator_callback(void *arg, const char *dname)
+{
+    insert_entry((FILE*)arg, dname);
+}
 void list_arch(const char *fname)
 {
     FILE *fh = fopen(fname, "r");
@@ -79,58 +184,10 @@ void create_arch(const char *fname, char *entries[])
         perror("Archive file could not be opened for writing");
     else
     {
-        struct tar_header head;
-        struct stat fdat;
-        size_t len;
-        char cbuf[TAR_HEADER_SIZE];
-        FILE *fin;
         for(char **it = entries; *it != NULL; ++it)
         {
-            memset(&head, 0, sizeof head);
-            strcpy(head.name, *it);
-            strcpy(head.ver, "00");
-            stat(head.name, &fdat);
-            head.size = fdat.st_size;
-            head.mtime = fdat.st_mtime;
-            head.uid = fdat.st_uid;
-            head.gid = fdat.st_gid;
-            head.mode = fdat.st_mode;
-            if(S_ISREG(fdat.st_mode))
-            {
-                head.type = TAR_REG;
-                fin = fopen(*it, "r");
-            }
-            else if(S_ISDIR(fdat.st_mode))
-            {
-                head.type = TAR_DIR;
-                len = strlen(head.name);
-                if(head.name[len - 1] != '/')
-                    head.name[len] = '/';
-            }
-            tar_write(fh, &head);
-            if(head.type == TAR_REG)
-            {
-                if(fin == NULL)
-                {
-                    fprintf(stderr, "Opening file %s", *it);
-                    perror(" failed");
-                }
-                else
-                {
-                    len = TAR_HEADER_SIZE;
-                    while(!feof(fin) && len == TAR_HEADER_SIZE)
-                    {
-                        len = fread(cbuf, 1, TAR_HEADER_SIZE, fin);
-                        fwrite(cbuf, 1, len, fh);
-                    }
-                    if(len < TAR_HEADER_SIZE)
-                    {
-                        memset(cbuf, 0, -len & 0x1ff);
-                        fwrite(cbuf, 1, -len & 0x1ff, fh);
-                    }
-                    fclose(fin);
-                }
-            }
+            if(insert_entry(fh, *it))
+                recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
         }
         tar_end_archive(fh);
         fclose(fh);
