@@ -7,7 +7,7 @@
 #include"tar.h"
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
 enum operation
-{   LIST, CREATE, EXTRACT   };
+{   APPEND, LIST, CREATE, EXTRACT   };
 char self_or_parent_directory(const char *name)
 {
     return name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
@@ -53,6 +53,10 @@ void recursive_directory_iterator(const char *dname, void(*callback)(void *arg, 
 void print_archive_entry(FILE *fh, const char *fmt, const struct tar_header *headerp)
 {
     fprintf(fh, fmt, headerp->name, headerp->size);
+}
+size_t append_arch_enum_callback(void *arg, union tar_header_data *header)
+{
+    return 0;
 }
 size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
 {
@@ -166,6 +170,24 @@ void insert_iterator_callback(void *arg, const char *dname)
 {
     insert_entry((FILE*)arg, dname);
 }
+void append_arch(const char *fname, char *entries[])
+{
+    FILE *fh = fopen(fname, "r+");
+    if(fh == NULL)
+        perror("Archive file could not be opened for writing");
+    else
+    {
+        tar_enumerate_headers(fh, append_arch_enum_callback, NULL);
+        fseek(fh, -TAR_HEADER_SIZE, SEEK_CUR);
+        for(char **it = entries; *it != NULL; ++it)
+        {
+            if(insert_entry(fh, *it))
+                recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
+        }
+        tar_end_archive(fh);
+        fclose(fh);
+    }
+}
 void list_arch(const char *fname)
 {
     FILE *fh = fopen(fname, "r");
@@ -229,6 +251,9 @@ int main(int argl, char *argv[])
                         case'f':
                             nxtfile = 1;
                             break;
+                        case'r':
+                            op = APPEND;
+                            break;
                         case't':
                             op = LIST;
                             break;
@@ -250,6 +275,9 @@ int main(int argl, char *argv[])
         }
         switch(op)
         {
+            case APPEND:
+                append_arch(target, argv + optend);
+                break;
             case CREATE:
                 create_arch(target, argv + optend);
                 break;

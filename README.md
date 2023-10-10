@@ -18,5 +18,5 @@ However, not all features have been implemented.
 
 Options available are:
 ```
--c -f -t -x
+-c -f -r -t -x
 ```
