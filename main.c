@@ -7,7 +7,7 @@
 #include"tar.h"
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
 enum operation
-{   APPEND, LIST, CREATE, EXTRACT   };
+{   APPEND, CONCAT, LIST, CREATE, EXTRACT   };
 char self_or_parent_directory(const char *name)
 {
     return name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
@@ -170,20 +170,54 @@ void insert_iterator_callback(void *arg, const char *dname)
 {
     insert_entry((FILE*)arg, dname);
 }
-void append_arch(const char *fname, char *entries[])
+void append_entry_normal(FILE *fh, const char *name)
+{
+    if(insert_entry(fh, name))
+        recursive_directory_iterator(name, insert_iterator_callback, (void*)fh);
+}
+void append_entry_concat(FILE *fh, const char *name)
+{
+    FILE *other = fopen(name, "r");
+    if(other == NULL)
+    {
+        fprintf(stderr, "Reading %s", name);
+        perror(" failed");
+    }
+    else
+    {
+        union tar_header_data rhead;
+        int succ = tar_read_raw(other, &rhead);
+        while(succ == 0)
+        {
+            fwrite(rhead.raw, 1, TAR_HEADER_SIZE, fh);
+            succ = tar_read_raw(other, &rhead);
+        }
+        fclose(other);
+    }
+}
+void append_arch(const char *fname, char *entries[], enum operation op)
 {
     FILE *fh = fopen(fname, "r+");
     if(fh == NULL)
         perror("Archive file could not be opened for writing");
     else
     {
+        void(*append_func)(FILE *fh, const char *name);
         tar_enumerate_headers(fh, append_arch_enum_callback, NULL);
         fseek(fh, -TAR_HEADER_SIZE, SEEK_CUR);
-        for(char **it = entries; *it != NULL; ++it)
+        switch(op)
         {
-            if(insert_entry(fh, *it))
-                recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
+            case APPEND:
+                append_func = append_entry_normal;
+                break;
+            case CONCAT:
+                append_func = append_entry_concat;
+                break;
+            default:
+                append_func = NULL;
         }
+        for(char **it = entries; *it != NULL; ++it)
+            append_func(fh, *it);
         tar_end_archive(fh);
         fclose(fh);
     }
@@ -245,6 +279,9 @@ int main(int argl, char *argv[])
                 {
                     switch(*it)
                     {
+                        case'A':
+                            op = CONCAT;
+                            break;
                         case'c':
                             op = CREATE;
                             break;
@@ -276,7 +313,8 @@ int main(int argl, char *argv[])
         switch(op)
         {
             case APPEND:
-                append_arch(target, argv + optend);
+            case CONCAT:
+                append_arch(target, argv + optend, op);
                 break;
             case CREATE:
                 create_arch(target, argv + optend);

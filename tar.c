@@ -85,11 +85,11 @@ int tar_htor(union tar_header_data *restrict dest, const struct tar_header *rest
         memcpy(dest->header.fpref, src->name, namlen - sizeof(dest->header.name));
     }
     else
-        memcpy(dest->header.name, src->name, sizeof(dest->header.name));
-    memcpy(dest->header.lnk, src->lnk, sizeof(dest->header.lnk));
-    memcpy(dest->header.user, src->user, sizeof(dest->header.user));
-    memcpy(dest->header.group, src->group, sizeof(dest->header.group));
-    memcpy(dest->header.ver, src->ver, sizeof(dest->header.ver));
+        memcpy(dest->header.name, src->name, namlen);
+    memcpy(dest->header.lnk, src->lnk, strlen(src->lnk));
+    memcpy(dest->header.user, src->user, strlen(src->user));
+    memcpy(dest->header.group, src->group, strlen(src->group));
+    memcpy(dest->header.ver, src->ver, strlen(src->ver));
     strcpy(dest->header.zzzzzzustar, "ustar");
     dest->header.zzzzzzspace = ' ';
     memset(dest->header.checksum, ' ', sizeof(dest->header.checksum));
