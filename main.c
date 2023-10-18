@@ -50,10 +50,6 @@ void recursive_directory_iterator(const char *dname, void(*callback)(void *arg, 
         }
     }
 }
-void print_archive_entry(FILE *fh, const char *fmt, const struct tar_header *headerp)
-{
-    fprintf(fh, fmt, headerp->name, headerp->size);
-}
 size_t append_arch_enum_callback(void *arg, union tar_header_data *header)
 {
     return 0;
@@ -62,7 +58,37 @@ size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
 {
     struct tar_header x;
     tar_rtoh(&x, header);
-    print_archive_entry(stdout, "%s %li\n", &x);
+    if(arg == NULL)
+        printf("%s\n", x.name);
+    else
+    {
+        int shiftcnt, pos;
+        char modestr[11] = "----------";
+        char rwx[4] = "rwx";
+        for(int i = 0; i < 3; ++i)
+        {
+            for(int j = 0; j < 3; ++j)
+            {
+                pos = i * 3 + j;
+                shiftcnt = 8 - pos;
+                if((x.mode >> shiftcnt & 1) == 1)
+                    modestr[pos + 1] = rwx[j];
+            }
+        }
+        switch(x.type)
+        {
+            case TAR_DIR:
+                modestr[0] = 'd';
+                break;
+            case TAR_BLK:
+                modestr[0] = 'b';
+                break;
+            case TAR_CHR:
+                modestr[0] = 'c';
+                break;
+        }
+        printf("%s %lu %lu %s\n", modestr, x.size, x.mtime, x.name);
+    }
     return 0;
 }
 size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
@@ -222,14 +248,14 @@ void append_arch(const char *fname, char *entries[], enum operation op)
         fclose(fh);
     }
 }
-void list_arch(const char *fname)
+void list_arch(const char *fname, char verbose)
 {
     FILE *fh = fopen(fname, "r");
     if(fh == NULL)
         perror("Archive file could not be opened for reading");
     else
     {
-        tar_enumerate_headers(fh, list_arch_enum_callback, NULL);
+        tar_enumerate_headers(fh, list_arch_enum_callback, verbose ? fh : NULL);
         fclose(fh);
     }
 }
@@ -269,7 +295,7 @@ int main(int argl, char *argv[])
     {
         int optend = 1;
         enum operation op;
-        char *arg, *target = NULL, nxtfile = 0;
+        char *arg, *target = NULL, nxtfile = 0, verbose = 0;
         for(int i = 1; optend == 1 && i < argl; ++i)
         {
             arg = argv[i];
@@ -293,6 +319,9 @@ int main(int argl, char *argv[])
                             break;
                         case't':
                             op = LIST;
+                            break;
+                        case'v':
+                            verbose = *it;
                             break;
                         case'x':
                             op = EXTRACT;
@@ -323,7 +352,7 @@ int main(int argl, char *argv[])
                 extract_arch(target);
                 break;
             case LIST:
-                list_arch(target);
+                list_arch(target, verbose);
                 break;
         }
     }
