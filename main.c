@@ -221,6 +221,9 @@ void append_entry_concat(FILE *fh, const char *name)
         fclose(other);
     }
 }
+void append_entry_update(FILE *fh, const char *name)
+{
+}
 void append_arch(const char *fname, char *entries[], enum operation op)
 {
     FILE *fh = fopen(fname, "r+");
@@ -296,36 +299,63 @@ int main(int argl, char *argv[])
         int optend = 1;
         enum operation op;
         char *arg, *target = NULL, nxtfile = 0, verbose = 0;
+        char longopt;
         for(int i = 1; optend == 1 && i < argl; ++i)
         {
             arg = argv[i];
+            longopt = 0;
             if(arg[0] == '-')
             {
-                for(char *it = arg + 1; *it != '\0'; ++it)
+                for(char *it = arg + 1; !longopt && *it != '\0'; ++it)
                 {
                     switch(*it)
                     {
+                        case'-':
+                            longopt = 1;
+                            ++it;
+                        if(strcmp(it, "concatenate") == 0)
+                        {
                         case'A':
                             op = CONCAT;
                             break;
+                        }
+                        else if(strcmp(it, "create") == 0)
+                        {
                         case'c':
                             op = CREATE;
                             break;
+                        }
+                        else if(strcmp(it, "file") == 0)
+                        {
                         case'f':
                             nxtfile = 1;
                             break;
+                        }
+                        else if(strcmp(it, "append") == 0)
+                        {
                         case'r':
                             op = APPEND;
                             break;
+                        }
+                        else if(strcmp(it, "list") == 0)
+                        {
                         case't':
                             op = LIST;
                             break;
+                        }
+                        else if(strcmp(it, "verbose") == 0)
+                        {
                         case'v':
                             verbose = *it;
                             break;
+                        }
+                        else if(strcmp(it, "extract") == 0 || strcmp(it, "get") == 0)
+                        {
                         case'x':
                             op = EXTRACT;
                             break;
+                        }
+                        else
                         default:
                             fprintf(stderr, "Unrecognized option %c will be ignored.\n", *it);
                     }
