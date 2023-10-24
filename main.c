@@ -224,70 +224,46 @@ void append_entry_concat(FILE *fh, const char *name)
 void append_entry_update(FILE *fh, const char *name)
 {
 }
-void append_arch(const char *fname, char *entries[], enum operation op)
+void append_arch(FILE *fh, char *entries[], enum operation op)
 {
-    FILE *fh = fopen(fname, "r+");
-    if(fh == NULL)
-        perror("Archive file could not be opened for writing");
-    else
+    void(*append_func)(FILE *fh, const char *name);
+    tar_enumerate_headers(fh, append_arch_enum_callback, NULL);
+    fseek(fh, -TAR_HEADER_SIZE, SEEK_CUR);
+    switch(op)
     {
-        void(*append_func)(FILE *fh, const char *name);
-        tar_enumerate_headers(fh, append_arch_enum_callback, NULL);
-        fseek(fh, -TAR_HEADER_SIZE, SEEK_CUR);
-        switch(op)
-        {
-            case APPEND:
-                append_func = append_entry_normal;
-                break;
-            case CONCAT:
-                append_func = append_entry_concat;
-                break;
-            default:
-                append_func = NULL;
-        }
-        for(char **it = entries; *it != NULL; ++it)
-            append_func(fh, *it);
-        tar_end_archive(fh);
-        fclose(fh);
+        case APPEND:
+            append_func = append_entry_normal;
+            break;
+        case CONCAT:
+            append_func = append_entry_concat;
+            break;
+        default:
+            append_func = NULL;
     }
+    for(char **it = entries; *it != NULL; ++it)
+        append_func(fh, *it);
+    tar_end_archive(fh);
+    fclose(fh);
 }
-void list_arch(const char *fname, char verbose)
+void list_arch(FILE *fh, char verbose)
 {
-    FILE *fh = fopen(fname, "r");
-    if(fh == NULL)
-        perror("Archive file could not be opened for reading");
-    else
-    {
-        tar_enumerate_headers(fh, list_arch_enum_callback, verbose ? fh : NULL);
-        fclose(fh);
-    }
+    tar_enumerate_headers(fh, list_arch_enum_callback, verbose ? fh : NULL);
+    fclose(fh);
 }
-void create_arch(const char *fname, char *entries[])
+void create_arch(FILE *fh, char *entries[])
 {
-    FILE *fh = fopen(fname, "wb");
-    if(fh == NULL)
-        perror("Archive file could not be opened for writing");
-    else
+    for(char **it = entries; *it != NULL; ++it)
     {
-        for(char **it = entries; *it != NULL; ++it)
-        {
-            if(insert_entry(fh, *it))
-                recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
-        }
-        tar_end_archive(fh);
-        fclose(fh);
+        if(insert_entry(fh, *it))
+            recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
     }
+    tar_end_archive(fh);
+    fclose(fh);
 }
-void extract_arch(const char *fname)
+void extract_arch(FILE *fh)
 {
-    FILE *fh = fopen(fname, "r");
-    if(fh == NULL)
-        perror("Archive file could not be opened for reading");
-    else
-    {
-        tar_enumerate_headers(fh, extract_arch_enum_callback, (void*)fh);
-        fclose(fh);
-    }
+    tar_enumerate_headers(fh, extract_arch_enum_callback, (void*)fh);
+    fclose(fh);
 }
 int main(int argl, char *argv[])
 {
@@ -298,7 +274,10 @@ int main(int argl, char *argv[])
     {
         int optend = 1;
         enum operation op;
-        char *arg, *target = NULL, nxtfile = 0, verbose = 0;
+        FILE *fh;
+        char *arg, *target = NULL;
+        char openmode[3] = "r";
+        char nxtfile = 0, verbose = 0;
         char longopt;
         for(int i = 1; optend == 1 && i < argl; ++i)
         {
@@ -317,12 +296,14 @@ int main(int argl, char *argv[])
                         {
                         case'A':
                             op = CONCAT;
+                            strcpy(openmode + 1, "+");
                             break;
                         }
                         else if(strcmp(it, "create") == 0)
                         {
                         case'c':
                             op = CREATE;
+                            openmode[0] = 'w';
                             break;
                         }
                         else if(strcmp(it, "file") == 0)
@@ -331,10 +312,16 @@ int main(int argl, char *argv[])
                             nxtfile = 1;
                             break;
                         }
+                        else if(strncmp(it, "file=", 5) == 0)
+                        {
+                            target = it + 5;
+                            break;
+                        }
                         else if(strcmp(it, "append") == 0)
                         {
                         case'r':
                             op = APPEND;
+                            strcpy(openmode + 1, "+");
                             break;
                         }
                         else if(strcmp(it, "list") == 0)
@@ -369,21 +356,30 @@ int main(int argl, char *argv[])
             else
                 optend = i;
         }
-        switch(op)
+        fh = fopen(target, openmode);
+        if(fh == NULL)
         {
-            case APPEND:
-            case CONCAT:
-                append_arch(target, argv + optend, op);
-                break;
-            case CREATE:
-                create_arch(target, argv + optend);
-                break;
-            case EXTRACT:
-                extract_arch(target);
-                break;
-            case LIST:
-                list_arch(target, verbose);
-                break;
+            fprintf(stderr, "Opening %s", target);
+            perror(" failed");
+        }
+        else
+        {
+            switch(op)
+            {
+                case APPEND:
+                case CONCAT:
+                    append_arch(fh, argv + optend, op);
+                    break;
+                case CREATE:
+                    create_arch(fh, argv + optend);
+                    break;
+                case EXTRACT:
+                    extract_arch(fh);
+                    break;
+                case LIST:
+                    list_arch(fh, verbose);
+                    break;
+            }
         }
     }
     return succ;
