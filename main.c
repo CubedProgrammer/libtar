@@ -7,7 +7,7 @@
 #include"tar.h"
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
 enum operation
-{   APPEND, CONCAT, LIST, CREATE, EXTRACT   };
+{   APPEND, UPDATE, CONCAT, LIST, CREATE, EXTRACT   };
 char self_or_parent_directory(const char *name)
 {
     return name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
@@ -330,6 +330,12 @@ int main(int argl, char *argv[])
                             op = LIST;
                             break;
                         }
+                        else if(strcmp(it, "update") == 0)
+                        {
+                        case'u':
+                            op = UPDATE;
+                            break;
+                        }
                         else if(strcmp(it, "verbose") == 0)
                         {
                         case'v':
@@ -368,6 +374,7 @@ int main(int argl, char *argv[])
             {
                 case APPEND:
                 case CONCAT:
+                case UPDATE:
                     append_arch(fh, argv + optend, op);
                     break;
                 case CREATE:

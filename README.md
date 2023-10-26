@@ -16,6 +16,8 @@ The exact location of Scrt1.o may not be /usr/lib on your computer, make sure yo
 This program tries to be compatible with POSIX tar utility, so read the man page.
 However, not all features have been implemented.
 
+Long form options are available.
+
 Options available are:
 ```
 -A -c -f -r -t -v -x
