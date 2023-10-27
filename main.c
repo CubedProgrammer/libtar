@@ -5,7 +5,9 @@
 #include<sys/stat.h>
 #include<sys/sysmacros.h>
 #include"tar.h"
+#include"str_int_map.h"
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
+struct tar_str_int_map tar_entry_date_map;
 enum operation
 {   APPEND, UPDATE, CONCAT, LIST, CREATE, EXTRACT   };
 char self_or_parent_directory(const char *name)
@@ -52,6 +54,13 @@ void recursive_directory_iterator(const char *dname, void(*callback)(void *arg, 
 }
 size_t append_arch_enum_callback(void *arg, union tar_header_data *header)
 {
+    enum operation op = *(enum operation*)arg;
+    if(op == UPDATE)
+    {
+        struct tar_header x;
+        tar_rtoh(&x, header);
+        tar_simap_insert(&tar_entry_date_map, x.name, x.mtime);
+    }
     return 0;
 }
 size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
@@ -223,11 +232,15 @@ void append_entry_concat(FILE *fh, const char *name)
 }
 void append_entry_update(FILE *fh, const char *name)
 {
+    struct stat fdat;
+    stat(name, &fdat);
+    if(fdat.st_mtime > tar_simap_fetch(&tar_entry_date_map, name))
+        append_entry_normal(fh, name);
 }
 void append_arch(FILE *fh, char *entries[], enum operation op)
 {
     void(*append_func)(FILE *fh, const char *name);
-    tar_enumerate_headers(fh, append_arch_enum_callback, NULL);
+    tar_enumerate_headers(fh, append_arch_enum_callback, &op);
     fseek(fh, -TAR_HEADER_SIZE, SEEK_CUR);
     switch(op)
     {
@@ -236,6 +249,9 @@ void append_arch(FILE *fh, char *entries[], enum operation op)
             break;
         case CONCAT:
             append_func = append_entry_concat;
+            break;
+        case UPDATE:
+            append_func = append_entry_update;
             break;
         default:
             append_func = NULL;
@@ -269,7 +285,10 @@ int main(int argl, char *argv[])
 {
     int succ = 0;
     if(argl == 1)
-        puts("tar https://github.com/CubedProgrammer/libtar");
+    {
+        printf("%s https://github.com/CubedProgrammer/libtar\n", *argv);
+        puts("Documentation at https://man7.org/linux/man-pages/man1/tar.1.html");
+    }
     else
     {
         int optend = 1;
@@ -279,6 +298,7 @@ int main(int argl, char *argv[])
         char openmode[3] = "r";
         char nxtfile = 0, verbose = 0;
         char longopt;
+        tar_simap_init(&tar_entry_date_map);
         for(int i = 1; optend == 1 && i < argl; ++i)
         {
             arg = argv[i];
@@ -334,6 +354,7 @@ int main(int argl, char *argv[])
                         {
                         case'u':
                             op = UPDATE;
+                            strcpy(openmode + 1, "+");
                             break;
                         }
                         else if(strcmp(it, "verbose") == 0)
@@ -388,6 +409,7 @@ int main(int argl, char *argv[])
                     break;
             }
         }
+        tar_simap_free(&tar_entry_date_map);
     }
     return succ;
 }

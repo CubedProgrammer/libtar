@@ -20,5 +20,5 @@ Long form options are available.
 
 Options available are:
 ```
--A -c -f -r -t -v -x
+-A -c -f -r -t -u -v -x
 ```

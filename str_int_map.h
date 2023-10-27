@@ -11,7 +11,7 @@ struct tar_str_int_map
     unsigned cnt;
     unsigned capa;
 };
-int tar_simap_free(struct tar_str_int_map *mp);
+void tar_simap_free(struct tar_str_int_map *mp);
 int tar_simap_init(struct tar_str_int_map *mp);
 int tar_simap_insert(struct tar_str_int_map *mp, const char *key, long val);
 long tar_simap_fetch(const struct tar_str_int_map *mp, const char *key);
