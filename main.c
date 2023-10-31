@@ -106,41 +106,44 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
     struct tar_header x;
     long cnt = 0;
     tar_rtoh(&x, header);
-    if(x.type == TAR_DIR)
+    if(tar_entry_date_map.cnt == 0 || tar_simap_fetch(&tar_entry_date_map, x.name) == 1)
     {
-        if(mkdir(x.name, x.mode))
+        if(x.type == TAR_DIR)
         {
-            if(errno == EEXIST)
-                chmod(x.name, x.mode);
-            else
+            if(mkdir(x.name, x.mode))
             {
-                fprintf(stderr, "mkdir %s failed", x.name);
-                perror("");
+                if(errno == EEXIST)
+                    chmod(x.name, x.mode);
+                else
+                {
+                    fprintf(stderr, "mkdir %s failed", x.name);
+                    perror("");
+                }
             }
-        }
-    }
-    else
-    {
-        FILE *fout = fopen(x.name, "wb");
-        if(fout == NULL)
-        {
-            fprintf(stderr, "Creating file %s", x.name);
-            perror(" failed");
         }
         else
         {
-            long bytes, diff = 0;
-            char cbuf[TAR_HEADER_SIZE];
-            FILE *fh = (FILE*)arg;
-            for(; cnt < x.size; cnt += bytes)
+            FILE *fout = fopen(x.name, "wb");
+            if(fout == NULL)
             {
-                bytes = fread(cbuf, 1, TAR_HEADER_SIZE, fh);
-                if(bytes + cnt > x.size)
-                    diff = cnt + bytes - x.size;
-                fwrite(cbuf, 1, bytes - diff, fout);
+                fprintf(stderr, "Creating file %s", x.name);
+                perror(" failed");
             }
-            fclose(fout);
-            chmod(x.name, x.mode);
+            else
+            {
+                long bytes, diff = 0;
+                char cbuf[TAR_HEADER_SIZE];
+                FILE *fh = (FILE*)arg;
+                for(; cnt < x.size; cnt += bytes)
+                {
+                    bytes = fread(cbuf, 1, TAR_HEADER_SIZE, fh);
+                    if(bytes + cnt > x.size)
+                        diff = cnt + bytes - x.size;
+                    fwrite(cbuf, 1, bytes - diff, fout);
+                }
+                fclose(fout);
+                chmod(x.name, x.mode);
+            }
         }
     }
     return cnt;
@@ -260,12 +263,10 @@ void append_arch(FILE *fh, char *entries[], enum operation op)
     for(char **it = entries; *it != NULL; ++it)
         append_func(fh, *it);
     tar_end_archive(fh);
-    fclose(fh);
 }
 void list_arch(FILE *fh, char verbose)
 {
     tar_enumerate_headers(fh, list_arch_enum_callback, verbose ? fh : NULL);
-    fclose(fh);
 }
 void create_arch(FILE *fh, char *entries[])
 {
@@ -275,12 +276,12 @@ void create_arch(FILE *fh, char *entries[])
             recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
     }
     tar_end_archive(fh);
-    fclose(fh);
 }
-void extract_arch(FILE *fh)
+void extract_arch(FILE *fh, char *entries[])
 {
+    for(char **it = entries; *it != NULL; ++it)
+        tar_simap_insert(&tar_entry_date_map, *it, 1);
     tar_enumerate_headers(fh, extract_arch_enum_callback, (void*)fh);
-    fclose(fh);
 }
 int main(int argl, char *argv[])
 {
@@ -417,12 +418,13 @@ int main(int argl, char *argv[])
                     create_arch(fh, argv + optend);
                     break;
                 case EXTRACT:
-                    extract_arch(fh);
+                    extract_arch(fh, argv + optend);
                     break;
                 case LIST:
                     list_arch(fh, verbose);
                     break;
             }
+            fclose(fh);
         }
         tar_simap_free(&tar_entry_date_map);
     }
