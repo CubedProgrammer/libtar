@@ -4,6 +4,7 @@
 #include<string.h>
 #include<sys/stat.h>
 #include<sys/sysmacros.h>
+#include<unistd.h>
 #include"tar.h"
 #include"str_int_map.h"
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
@@ -296,7 +297,8 @@ int main(int argl, char *argv[])
         FILE *fh;
         char *arg, *target = NULL;
         char openmode[3] = "r";
-        char nxtfile = 0, verbose = 0;
+        char nxtfile = 0, nxtdir = 0;
+        char verbose = 0;
         char longopt;
         tar_simap_init(&tar_entry_date_map);
         for(int i = 1; optend == 1 && i < argl; ++i)
@@ -319,6 +321,14 @@ int main(int argl, char *argv[])
                             strcpy(openmode + 1, "+");
                             break;
                         }
+                        else if(strcmp(it, "directory") == 0)
+                        {
+                        case'C':
+                            nxtdir = 1;
+                            break;
+                        }
+                        else if(strncmp(it, "directory=", 10) == 0)
+                            chdir(it + 10);
                         else if(strcmp(it, "create") == 0)
                         {
                         case'c':
@@ -379,6 +389,11 @@ int main(int argl, char *argv[])
             {
                 target = arg;
                 nxtfile = 0;
+            }
+            else if(nxtdir)
+            {
+                chdir(arg);
+                nxtdir = 0;
             }
             else
                 optend = i;
