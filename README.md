@@ -20,5 +20,7 @@ Long form options are available.
 
 Options available are:
 ```
--A -C -c -f -r -t -u -v -x
+-A -C -c -f -k -r -t -u -v -x
+--skip-old-files
+--keep-newer-files
 ```

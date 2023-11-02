@@ -7,6 +7,14 @@
 #include<unistd.h>
 #include"tar.h"
 #include"str_int_map.h"
+#define MAJOR 0
+#define MINOR 7
+#define PATCH 0
+struct extract_options
+{
+    FILE *fh;
+    short op;
+};
 const char dl_loader[]__attribute__((section(".interp")))="/usr/lib/ld-linux-x86-64.so.2";
 struct tar_str_int_map tar_entry_date_map;
 enum operation
@@ -123,17 +131,43 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
         }
         else
         {
-            FILE *fout = fopen(x.name, "wb");
-            if(fout == NULL)
+            struct extract_options exop = *(struct extract_options*)arg;
+            FILE *fout;
+            char okay = 0, recent = 1;
+            struct stat fdat;
+            switch(exop.op)
             {
-                fprintf(stderr, "Creating file %s", x.name);
-                perror(" failed");
+                case 3:
+                    if(stat(x.name, &fdat) == 0)
+                        recent = fdat.st_mtime > x.mtime;
+                    else
+                        recent = 0;
+                case 2:
+                case 1:
+                    if(recent && access(x.name, F_OK) == 0)
+                    {
+                        if(exop.op == 1)
+                            fprintf(stderr, "File %s already exists.\n", x.name);
+                    }
+                    else
+                    {
+                case 0:
+                        fout = fopen(x.name, "wb");
+                        if(fout == NULL)
+                        {
+                            fprintf(stderr, "Creating file %s", x.name);
+                            perror(" failed");
+                        }
+                        else
+                            okay = 1;
+                    }
+                    break;
             }
-            else
+            if(okay)
             {
                 long bytes, diff = 0;
                 char cbuf[TAR_HEADER_SIZE];
-                FILE *fh = (FILE*)arg;
+                FILE *fh = exop.fh;
                 for(; cnt < x.size; cnt += bytes)
                 {
                     bytes = fread(cbuf, 1, TAR_HEADER_SIZE, fh);
@@ -277,18 +311,24 @@ void create_arch(FILE *fh, char *entries[])
     }
     tar_end_archive(fh);
 }
-void extract_arch(FILE *fh, char *entries[])
+void extract_arch(FILE *fh, char *entries[], short op)
 {
+    struct extract_options exop;
     for(char **it = entries; *it != NULL; ++it)
         tar_simap_insert(&tar_entry_date_map, *it, 1);
-    tar_enumerate_headers(fh, extract_arch_enum_callback, (void*)fh);
+    exop.fh = fh;
+    exop.op = op;
+    tar_enumerate_headers(fh, extract_arch_enum_callback, (void*)&exop);
 }
 int main(int argl, char *argv[])
 {
     int succ = 0;
     if(argl == 1)
     {
-        printf("%s https://github.com/CubedProgrammer/libtar\n", *argv);
+        printf("%s version %d.%d", *argv, MAJOR, MINOR);
+        if(PATCH)
+            printf(".%d", PATCH);
+        puts(" https://github.com/CubedProgrammer/libtar");
         puts("Documentation at https://man7.org/linux/man-pages/man1/tar.1.html");
     }
     else
@@ -301,6 +341,7 @@ int main(int argl, char *argv[])
         char nxtfile = 0, nxtdir = 0;
         char verbose = 0;
         char longopt;
+        short exop = 0;
         tar_simap_init(&tar_entry_date_map);
         for(int i = 1; optend == 1 && i < argl; ++i)
         {
@@ -348,6 +389,12 @@ int main(int argl, char *argv[])
                             target = it + 5;
                             break;
                         }
+                        else if(strcmp(it, "keep-old-files") == 0)
+                        {
+                        case'k':
+                            exop = 1;
+                            break;
+                        }
                         else if(strcmp(it, "append") == 0)
                         {
                         case'r':
@@ -378,6 +425,16 @@ int main(int argl, char *argv[])
                         {
                         case'x':
                             op = EXTRACT;
+                            break;
+                        }
+                        else if(strcmp(it, "skip-old-files") == 0)
+                        {
+                            exop = 2;
+                            break;
+                        }
+                        else if(strcmp(it, "keep-newer-files") == 0)
+                        {
+                            exop = 3;
                             break;
                         }
                         else
@@ -418,7 +475,7 @@ int main(int argl, char *argv[])
                     create_arch(fh, argv + optend);
                     break;
                 case EXTRACT:
-                    extract_arch(fh, argv + optend);
+                    extract_arch(fh, argv + optend, exop);
                     break;
                 case LIST:
                     list_arch(fh, verbose);
