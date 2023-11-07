@@ -4,12 +4,20 @@
 #include<string.h>
 #include<sys/stat.h>
 #include<sys/sysmacros.h>
+#include<sys/types.h>
 #include<unistd.h>
+#include<utime.h>
 #include"tar.h"
 #include"str_int_map.h"
 #define MAJOR 0
 #define MINOR 7
 #define PATCH 0
+#define EX_KEEP 1
+#define EX_SKIP 2
+#define EX_UPDATE 3
+#define EX_PERM 4
+#define EX_TOUCH 010
+#define EX_UNLNK 020
 struct extract_options
 {
     FILE *fh;
@@ -135,7 +143,9 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
             FILE *fout;
             char okay = 0, recent = 1;
             struct stat fdat;
-            switch(exop.op)
+            struct utimbuf ut;
+            short owop = exop.op & 0b11;
+            switch(owop)
             {
                 case 3:
                     if(stat(x.name, &fdat) == 0)
@@ -152,6 +162,8 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
                     else
                     {
                 case 0:
+                        if(exop.op & EX_UNLNK)
+                            unlink(x.name);
                         fout = fopen(x.name, "wb");
                         if(fout == NULL)
                         {
@@ -176,7 +188,14 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
                     fwrite(cbuf, 1, bytes - diff, fout);
                 }
                 fclose(fout);
-                chmod(x.name, x.mode);
+                if((exop.op & EX_TOUCH) == 0)
+                {
+                    ut.actime = x.mtime;
+                    ut.modtime = x.mtime;
+                    utime(x.name, &ut);
+                }
+                if(exop.op & 0b100)
+                    chmod(x.name, x.mode);
             }
         }
     }
@@ -392,7 +411,19 @@ int main(int argl, char *argv[])
                         else if(strcmp(it, "keep-old-files") == 0)
                         {
                         case'k':
-                            exop = 1;
+                            exop |= 1;
+                            break;
+                        }
+                        else if(strcmp(it, "touch") == 0)
+                        {
+                        case'm':
+                            exop |= EX_TOUCH;
+                            break;
+                        }
+                        else if(strcmp(it, "perserve-permissions") == 0 || strcmp(it, "same-permissions") == 0)
+                        {
+                        case'p':
+                            exop |= EX_PERM;
                             break;
                         }
                         else if(strcmp(it, "append") == 0)
@@ -406,6 +437,12 @@ int main(int argl, char *argv[])
                         {
                         case't':
                             op = LIST;
+                            break;
+                        }
+                        else if(strcmp(it, "unlink-first") == 0)
+                        {
+                        case'U':
+                            exop |= EX_UNLNK;
                             break;
                         }
                         else if(strcmp(it, "update") == 0)
@@ -429,12 +466,12 @@ int main(int argl, char *argv[])
                         }
                         else if(strcmp(it, "skip-old-files") == 0)
                         {
-                            exop = 2;
+                            exop |= 2;
                             break;
                         }
                         else if(strcmp(it, "keep-newer-files") == 0)
                         {
-                            exop = 3;
+                            exop |= 3;
                             break;
                         }
                         else
