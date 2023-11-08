@@ -10,7 +10,7 @@
 #include"tar.h"
 #include"str_int_map.h"
 #define MAJOR 0
-#define MINOR 7
+#define MINOR 8
 #define PATCH 0
 #define EX_KEEP 1
 #define EX_SKIP 2
@@ -349,6 +349,8 @@ int main(int argl, char *argv[])
             printf(".%d", PATCH);
         puts(" https://github.com/CubedProgrammer/libtar");
         puts("Documentation at https://man7.org/linux/man-pages/man1/tar.1.html");
+        puts("If the archive file is not specified, the standard output is used.");
+        puts("Or the standard input for extraction.");
     }
     else
     {
@@ -493,7 +495,10 @@ int main(int argl, char *argv[])
             else
                 optend = i;
         }
-        fh = fopen(target, openmode);
+        if(target == NULL)
+            fh = op == EXTRACT ? stdin : stdout;
+        else
+            fh = fopen(target, openmode);
         if(fh == NULL)
         {
             fprintf(stderr, "Opening %s", target);
