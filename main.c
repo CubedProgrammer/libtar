@@ -232,6 +232,15 @@ int insert_entry(FILE *fh, const char *fname)
         if(head.name[len - 1] != '/')
             head.name[len] = '/';
     }
+    else if(S_ISCHR(fdat.st_mode))
+        head.type = TAR_CHR;
+    else if(S_ISBLK(fdat.st_mode))
+        head.type = TAR_BLK;
+    else if(S_ISFIFO(fdat.st_mode))
+        head.type = TAR_PIP;
+    else if(S_ISLNK(fdat.st_mode))
+        head.type = TAR_SYM;
+    //else if(S_ISSOCK(fdat.st_mode));
     tar_write(fh, &head);
     if(head.type == TAR_REG)
     {
@@ -476,6 +485,8 @@ int main(int argl, char *argv[])
                             exop |= 3;
                             break;
                         }
+                        else if(longopt)
+                            fprintf(stderr, "Unrecognized option %s will be ignored.\n", it);
                         else
                         default:
                             fprintf(stderr, "Unrecognized option %c will be ignored.\n", *it);
