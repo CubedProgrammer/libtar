@@ -12,7 +12,7 @@
 #include"tar.h"
 #include"str_int_map.h"
 #define MAJOR 0
-#define MINOR 8
+#define MINOR 9
 #define PATCH 0
 #define EX_KEEP 1
 #define EX_SKIP 2
@@ -221,6 +221,7 @@ int insert_entry(FILE *fh, const char *fname)
     char cbuf[TAR_HEADER_SIZE];
     struct passwd *pdat;
     struct group *gdat;
+    char ins = 1;
     FILE *fin;
     memset(&head, 0, sizeof head);
     strcpy(head.name, fname);
@@ -264,8 +265,12 @@ int insert_entry(FILE *fh, const char *fname)
         readlink(head.name, head.lnk, sizeof(head.lnk) - 1);
     }
     else if(S_ISSOCK(fdat.st_mode))
+    {
         fprintf(stderr, "TAR cannot accept sockets, %s will be ignored.\n", head.name);
-    tar_write(fh, &head);
+        ins = 0;
+    }
+    if(ins)
+        tar_write(fh, &head);
     if(head.type == TAR_REG)
     {
         if(fin == NULL)
