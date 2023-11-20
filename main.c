@@ -103,6 +103,9 @@ size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
         }
         switch(x.type)
         {
+            case TAR_PIP:
+                modestr[0] = 'p';
+                break;
             case TAR_DIR:
                 modestr[0] = 'd';
                 break;
@@ -112,8 +115,14 @@ size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
             case TAR_CHR:
                 modestr[0] = 'c';
                 break;
+            case TAR_SYM:
+                modestr[0] = 'l';
+                break;
         }
-        printf("%s %lu %lu %s\n", modestr, x.size, x.mtime, x.name);
+        if(x.type == TAR_SYM)
+            printf("%s %lu %lu %s -> %s\n", modestr, x.size, x.mtime, x.name, x.lnk);
+        else
+            printf("%s %lu %lu %s\n", modestr, x.size, x.mtime, x.name);
     }
     return 0;
 }
@@ -211,8 +220,8 @@ int insert_entry(FILE *fh, const char *fname)
     memset(&head, 0, sizeof head);
     strcpy(head.name, fname);
     strcpy(head.ver, "00");
-    stat(head.name, &fdat);
-    head.size = fdat.st_size;
+    lstat(head.name, &fdat);
+    head.size = 0;
     head.mtime = fdat.st_mtime;
     head.uid = fdat.st_uid;
     head.gid = fdat.st_gid;
@@ -222,12 +231,12 @@ int insert_entry(FILE *fh, const char *fname)
     if(S_ISREG(fdat.st_mode))
     {
         head.type = TAR_REG;
+        head.size = fdat.st_size;
         fin = fopen(head.name, "r");
     }
     else if(S_ISDIR(fdat.st_mode))
     {
         head.type = TAR_DIR;
-        head.size = 0;
         len = strlen(head.name);
         if(head.name[len - 1] != '/')
             head.name[len] = '/';
@@ -239,7 +248,10 @@ int insert_entry(FILE *fh, const char *fname)
     else if(S_ISFIFO(fdat.st_mode))
         head.type = TAR_PIP;
     else if(S_ISLNK(fdat.st_mode))
+    {
         head.type = TAR_SYM;
+        readlink(head.name, head.lnk, sizeof(head.lnk) - 1);
+    }
     //else if(S_ISSOCK(fdat.st_mode));
     tar_write(fh, &head);
     if(head.type == TAR_REG)
