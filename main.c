@@ -1,5 +1,7 @@
 #include<dirent.h>
 #include<errno.h>
+#include<grp.h>
+#include<pwd.h>
 #include<stdlib.h>
 #include<string.h>
 #include<sys/stat.h>
@@ -119,10 +121,11 @@ size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
                 modestr[0] = 'l';
                 break;
         }
+        printf("%s %s/%s %9lu %lu %s", modestr, x.user, x.group, x.size, x.mtime, x.name);
         if(x.type == TAR_SYM)
-            printf("%s %lu %lu %s -> %s\n", modestr, x.size, x.mtime, x.name, x.lnk);
+            printf(" -> %s\n", x.lnk);
         else
-            printf("%s %lu %lu %s\n", modestr, x.size, x.mtime, x.name);
+            putchar('\n');
     }
     return 0;
 }
@@ -216,6 +219,8 @@ int insert_entry(FILE *fh, const char *fname)
     struct stat fdat;
     size_t len;
     char cbuf[TAR_HEADER_SIZE];
+    struct passwd *pdat;
+    struct group *gdat;
     FILE *fin;
     memset(&head, 0, sizeof head);
     strcpy(head.name, fname);
@@ -226,6 +231,12 @@ int insert_entry(FILE *fh, const char *fname)
     head.uid = fdat.st_uid;
     head.gid = fdat.st_gid;
     head.mode = fdat.st_mode;
+    pdat = getpwuid(head.uid);
+    gdat = getgrgid(head.gid);
+    if(pdat != NULL)
+        strncpy(head.user, pdat->pw_name, sizeof(head.user));
+    if(gdat != NULL)
+        strncpy(head.group, gdat->gr_name, sizeof(head.group));
     head.devmajor = major(fdat.st_dev);
     head.devminor = minor(fdat.st_dev);
     if(S_ISREG(fdat.st_mode))
@@ -252,7 +263,8 @@ int insert_entry(FILE *fh, const char *fname)
         head.type = TAR_SYM;
         readlink(head.name, head.lnk, sizeof(head.lnk) - 1);
     }
-    //else if(S_ISSOCK(fdat.st_mode));
+    else if(S_ISSOCK(fdat.st_mode))
+        fprintf(stderr, "TAR cannot accept sockets, %s will be ignored.\n", head.name);
     tar_write(fh, &head);
     if(head.type == TAR_REG)
     {
