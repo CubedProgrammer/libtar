@@ -61,6 +61,7 @@ int tar_enumerate_headers_generic(void *restrict src, int(*reader)(void *restric
 // header to raw and raw to header
 int tar_htor(union tar_header_data *restrict dest, const struct tar_header *restrict src);
 int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *restrict src);
+int tar_verify(const union tar_header_data *header);
 int tar_read_stdc_file_handle_helper(void *restrict src, void *restrict dat, unsigned cnt);
 int tar_write_stdc_file_handle_helper(void *restrict dest, const void *restrict dat, unsigned cnt);
 int tar_seek_std_file_handle_helper(void *obj, long offset, int origin);

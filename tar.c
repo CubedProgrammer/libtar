@@ -131,3 +131,18 @@ int tar_rtoh(struct tar_header *restrict dest, const union tar_header_data *rest
     dest->ver[sizeof(src->header.ver)] = '\0';
     return 0;
 }
+int tar_verify(const union tar_header_data *header)
+{
+    unsigned sum = 0, stored = 0;
+    for(int i = 0; i < 6; ++i)
+    {
+        stored <<= 3;
+        stored |= header->header.checksum[i] - '0';
+    }
+    for(int i = 0; i < 148; ++i)
+        sum += header->raw[i] & 0xff;
+    sum += 256;
+    for(int i = 156; i < TAR_HEADER_SIZE; ++i)
+        sum += header->raw[i] & 0xff;
+    return sum == stored;
+}
