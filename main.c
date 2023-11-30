@@ -13,7 +13,7 @@
 #include"str_int_map.h"
 #define MAJOR 0
 #define MINOR 9
-#define PATCH 0
+#define PATCH 1
 #define EX_KEEP 1
 #define EX_SKIP 2
 #define EX_UPDATE 3
@@ -316,10 +316,27 @@ void append_entry_concat(FILE *fh, const char *name)
     else
     {
         union tar_header_data rhead;
+        unsigned verify = 0;
         int succ = tar_read_raw(other, &rhead);
         while(succ == 0)
         {
-            fwrite(rhead.raw, 1, TAR_HEADER_SIZE, fh);
+            if(verify == 0)
+            {
+                if(tar_verify(&rhead))
+                {
+                    for(unsigned i = 0; i < sizeof(rhead.header.size) - 1; ++i)
+                        verify = verify << 3 | rhead.header.size[i] - '0';
+                    verify = (verify + TAR_HEADER_SIZE - 1) / TAR_HEADER_SIZE;
+                    fwrite(rhead.raw, 1, TAR_HEADER_SIZE, fh);
+                }
+                else
+                    fprintf(stderr, "Invalid entry found in %s, skipping.\n", name);
+            }
+            else
+            {
+                --verify;
+                fwrite(rhead.raw, 1, TAR_HEADER_SIZE, fh);
+            }
             succ = tar_read_raw(other, &rhead);
         }
         fclose(other);
