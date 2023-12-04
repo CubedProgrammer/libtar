@@ -13,7 +13,7 @@
 #include"str_int_map.h"
 #define MAJOR 0
 #define MINOR 9
-#define PATCH 1
+#define PATCH 2
 #define EX_KEEP 1
 #define EX_SKIP 2
 #define EX_UPDATE 3
@@ -134,6 +134,7 @@ size_t list_arch_enum_callback(void *arg, union tar_header_data *header)
 size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
 {
     struct tar_header x;
+    struct extract_options exop = *(struct extract_options*)arg;
     long cnt = 0;
     tar_rtoh(&x, header);
     if(tar_entry_date_map.cnt == 0 || tar_simap_fetch(&tar_entry_date_map, x.name) == 1)
@@ -151,9 +152,24 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
                 }
             }
         }
+        else if(x.type == TAR_SYM)
+        {
+            if(symlink(x.lnk, x.name))
+            {
+                fprintf(stderr, "symlink %s to %s", x.name, x.lnk);
+                perror(" failed");
+            }
+        }
+        else if(x.type == TAR_PIP)
+        {
+            if(mkfifo(x.name, x.mode))
+            {
+                fprintf(stderr, "mkfifo %s", x.name);
+                perror(" failed");
+            }
+        }
         else
         {
-            struct extract_options exop = *(struct extract_options*)arg;
             FILE *fout;
             char okay = 0, recent = 1;
             struct stat fdat;
@@ -212,6 +228,8 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
                     chmod(x.name, x.mode);
             }
         }
+        if(exop.op & EX_VERBOSE)
+            printf("%s\n", x.name);
     }
     return cnt;
 }
@@ -433,7 +451,7 @@ int main(int argl, char *argv[])
     }
     else
     {
-        int optend = 1;
+        int optend = argl;
         enum operation op;
         FILE *fh;
         char *arg, *target = NULL;
@@ -443,7 +461,7 @@ int main(int argl, char *argv[])
         char longopt;
         short exop = 0;
         tar_simap_init(&tar_entry_date_map);
-        for(int i = 1; optend == 1 && i < argl; ++i)
+        for(int i = 1; i < optend; ++i)
         {
             arg = argv[i];
             longopt = 0;
