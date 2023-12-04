@@ -20,6 +20,8 @@
 #define EX_PERM 4
 #define EX_TOUCH 010
 #define EX_UNLNK 020
+#define EX_VERBOSE 040
+#define CR_VERIFY 0100
 struct extract_options
 {
     FILE *fh;
@@ -213,9 +215,10 @@ size_t extract_arch_enum_callback(void *arg, union tar_header_data *header)
     }
     return cnt;
 }
-int insert_entry(FILE *fh, const char *fname)
+int insert_entry(FILE *fh, const char *fname, short op)
 {
     struct tar_header head;
+    union tar_header_data dat;
     struct stat fdat;
     size_t len;
     char cbuf[TAR_HEADER_SIZE];
@@ -270,7 +273,21 @@ int insert_entry(FILE *fh, const char *fname)
         ins = 0;
     }
     if(ins)
-        tar_write(fh, &head);
+    {
+        tar_htor(&dat, &head);
+        tar_write_raw(fh, &dat);
+        if(op & EX_VERBOSE)
+        {
+            printf("Inserted %s into the archive.\n", head.name);
+            if(op & CR_VERIFY)
+            {
+                if(tar_verify(&dat))
+                    printf("%s verified\n", head.name);
+                else
+                    printf("%s is invalid\n", head.name);
+            }
+        }
+    }
     if(head.type == TAR_REG)
     {
         if(fin == NULL)
@@ -298,14 +315,18 @@ int insert_entry(FILE *fh, const char *fname)
 }
 void insert_iterator_callback(void *arg, const char *dname)
 {
-    insert_entry((FILE*)arg, dname);
+    struct extract_options *op = arg;
+    insert_entry(op->fh, dname, op->op);
 }
-void append_entry_normal(FILE *fh, const char *name)
+void append_entry_normal(FILE *fh, const char *name, short op)
 {
-    if(insert_entry(fh, name))
-        recursive_directory_iterator(name, insert_iterator_callback, (void*)fh);
+    struct extract_options crop;
+    crop.fh = fh;
+    crop.op = op;
+    if(insert_entry(fh, name, op))
+        recursive_directory_iterator(name, insert_iterator_callback, &crop);
 }
-void append_entry_concat(FILE *fh, const char *name)
+void append_entry_concat(FILE *fh, const char *name, short op)
 {
     FILE *other = fopen(name, "r");
     if(other == NULL)
@@ -342,16 +363,16 @@ void append_entry_concat(FILE *fh, const char *name)
         fclose(other);
     }
 }
-void append_entry_update(FILE *fh, const char *name)
+void append_entry_update(FILE *fh, const char *name, short op)
 {
     struct stat fdat;
     stat(name, &fdat);
     if(fdat.st_mtime > tar_simap_fetch(&tar_entry_date_map, name))
-        append_entry_normal(fh, name);
+        append_entry_normal(fh, name, op);
 }
-void append_arch(FILE *fh, char *entries[], enum operation op)
+void append_arch(FILE *fh, char *entries[], enum operation op, short crop)
 {
-    void(*append_func)(FILE *fh, const char *name);
+    void(*append_func)(FILE *fh, const char *name, short op);
     tar_enumerate_headers(fh, append_arch_enum_callback, &op);
     fseek(fh, -TAR_HEADER_SIZE, SEEK_CUR);
     switch(op)
@@ -369,19 +390,22 @@ void append_arch(FILE *fh, char *entries[], enum operation op)
             append_func = NULL;
     }
     for(char **it = entries; *it != NULL; ++it)
-        append_func(fh, *it);
+        append_func(fh, *it, crop);
     tar_end_archive(fh);
 }
 void list_arch(FILE *fh, char verbose)
 {
     tar_enumerate_headers(fh, list_arch_enum_callback, verbose ? fh : NULL);
 }
-void create_arch(FILE *fh, char *entries[])
+void create_arch(FILE *fh, char *entries[], short op)
 {
+    struct extract_options crop;
+    crop.fh = fh;
+    crop.op = op;
     for(char **it = entries; *it != NULL; ++it)
     {
-        if(insert_entry(fh, *it))
-            recursive_directory_iterator(*it, insert_iterator_callback, (void*)fh);
+        if(insert_entry(fh, *it, op))
+            recursive_directory_iterator(*it, insert_iterator_callback, &crop);
     }
     tar_end_archive(fh);
 }
@@ -432,7 +456,7 @@ int main(int argl, char *argv[])
                         case'-':
                             longopt = 1;
                             ++it;
-                        if(strcmp(it, "concatenate") == 0)
+                        if(strcmp(it, "concatenate") == 0 || strcmp(it, "catenate") == 0)
                         {
                         case'A':
                             op = CONCAT;
@@ -513,6 +537,13 @@ int main(int argl, char *argv[])
                         {
                         case'v':
                             verbose = *it;
+                            exop |= EX_VERBOSE;
+                            break;
+                        }
+                        else if(strcmp(it, "verify") == 0)
+                        {
+                        case'W':
+                            exop |= CR_VERIFY;
                             break;
                         }
                         else if(strcmp(it, "extract") == 0 || strcmp(it, "get") == 0)
@@ -568,10 +599,10 @@ int main(int argl, char *argv[])
                 case APPEND:
                 case CONCAT:
                 case UPDATE:
-                    append_arch(fh, argv + optend, op);
+                    append_arch(fh, argv + optend, op, exop);
                     break;
                 case CREATE:
-                    create_arch(fh, argv + optend);
+                    create_arch(fh, argv + optend, exop);
                     break;
                 case EXTRACT:
                     extract_arch(fh, argv + optend, exop);
