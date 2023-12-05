@@ -13,7 +13,7 @@
 #include"str_int_map.h"
 #define MAJOR 0
 #define MINOR 9
-#define PATCH 2
+#define PATCH 3
 #define EX_KEEP 1
 #define EX_SKIP 2
 #define EX_UPDATE 3
@@ -376,7 +376,7 @@ void append_entry_concat(FILE *fh, const char *name, short op)
                 --verify;
                 fwrite(rhead.raw, 1, TAR_HEADER_SIZE, fh);
             }
-            succ = tar_read_raw(other, &rhead);
+            succ = tar_read_raw(other, &rhead) * !verify;
         }
         fclose(other);
     }
@@ -455,6 +455,7 @@ int main(int argl, char *argv[])
         enum operation op;
         FILE *fh;
         char *arg, *target = NULL;
+        char *dirtarget = NULL;
         char openmode[3] = "r";
         char nxtfile = 0, nxtdir = 0;
         char verbose = 0;
@@ -595,7 +596,7 @@ int main(int argl, char *argv[])
             }
             else if(nxtdir)
             {
-                chdir(arg);
+                dirtarget = arg;
                 nxtdir = 0;
             }
             else
@@ -605,6 +606,8 @@ int main(int argl, char *argv[])
             fh = op == EXTRACT ? stdin : stdout;
         else
             fh = fopen(target, openmode);
+        if(dirtarget != NULL)
+            chdir(dirtarget);
         if(fh == NULL)
         {
             fprintf(stderr, "Opening %s", target);
