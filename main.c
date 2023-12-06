@@ -1,5 +1,6 @@
 #include<dirent.h>
 #include<errno.h>
+#include<fcntl.h>
 #include<grp.h>
 #include<pwd.h>
 #include<stdlib.h>
@@ -7,6 +8,7 @@
 #include<sys/stat.h>
 #include<sys/sysmacros.h>
 #include<sys/types.h>
+#include<sys/wait.h>
 #include<unistd.h>
 #include<utime.h>
 #include"tar.h"
@@ -436,6 +438,44 @@ void extract_arch(FILE *fh, char *entries[], short op)
     exop.op = op;
     tar_enumerate_headers(fh, extract_arch_enum_callback, (void*)&exop);
 }
+FILE *sendto(char *prog, char *target, int *pidp)
+{
+    int fds[2];
+    int pid;
+    FILE *handle = NULL;
+    if(pipe(fds))
+        perror("pipe failed");
+    else
+    {
+        int ipipe = fds[0], opipe = fds[1];
+        pid = fork();
+        if(pid > 0)
+        {
+            close(ipipe);
+            *pidp = pid;
+            handle = fdopen(opipe, "w");
+        }
+        else if(pid < 0)
+            perror("fork failed");
+        else
+        {
+            int filedes;
+            char *args[] = {prog, NULL};
+            close(opipe);
+            filedes = open(target, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+            dup2(ipipe, STDIN_FILENO);
+            dup2(filedes, STDOUT_FILENO);
+            close(ipipe);
+            close(filedes);
+            if(execvp(prog, args))
+            {
+                perror("execvp failed");
+                exit(1);
+            }
+        }
+    }
+    return handle;
+}
 int main(int argl, char *argv[])
 {
     int succ = 0;
@@ -458,9 +498,12 @@ int main(int argl, char *argv[])
         char *dirtarget = NULL;
         char openmode[3] = "r";
         char nxtfile = 0, nxtdir = 0;
-        char verbose = 0;
+        char verbose = 0, compress = 0;
         char longopt;
         short exop = 0;
+        char gzipstr[] = "gzip";
+        char *deflater[] = {gzipstr};
+        int compresspid = 0;
         tar_simap_init(&tar_entry_date_map);
         for(int i = 1; i < optend; ++i)
         {
@@ -571,6 +614,12 @@ int main(int argl, char *argv[])
                             op = EXTRACT;
                             break;
                         }
+                        else if(strcmp(it, "gzip") == 0)
+                        {
+                        case'z':
+                            compress = 1;
+                            break;
+                        }
                         else if(strcmp(it, "skip-old-files") == 0)
                         {
                             exop |= 2;
@@ -604,6 +653,8 @@ int main(int argl, char *argv[])
         }
         if(target == NULL)
             fh = op == EXTRACT ? stdin : stdout;
+        else if(compress)
+            fh = sendto(deflater[compress - 1], target, &compresspid);
         else
             fh = fopen(target, openmode);
         if(dirtarget != NULL)
@@ -633,6 +684,14 @@ int main(int argl, char *argv[])
                     break;
             }
             fclose(fh);
+            if(compresspid != 0)
+            {
+                int status;
+                waitpid(compresspid, &status, 0);
+                status = WEXITSTATUS(status);
+                if(status != 0)
+                    fprintf(stderr, "%s exited with status %d\n", deflater[compress - 1], status);
+            }
         }
         tar_simap_free(&tar_entry_date_map);
     }
