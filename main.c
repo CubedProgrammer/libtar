@@ -476,6 +476,41 @@ FILE *sendto(char *prog, char *target, int *pidp)
     }
     return handle;
 }
+FILE *recvfrom(char *prog, char *target, int *pidp)
+{
+    int fds[2];
+    int pid;
+    FILE *handle = NULL;
+    if(pipe(fds))
+        perror("pipe failed");
+    else
+    {
+        int ipipe = fds[0], opipe = fds[1];
+        pid = fork();
+        if(pid > 0)
+        {
+            close(opipe);
+            *pidp = pid;
+            handle = fdopen(ipipe, "r");
+        }
+        else if(pid < 0)
+            perror("fork failed");
+        else
+        {
+            char tostdout[] = "-c";
+            char *args[] = {prog, tostdout, target, NULL};
+            close(ipipe);
+            dup2(opipe, STDOUT_FILENO);
+            close(opipe);
+            if(execvp(prog, args))
+            {
+                perror("execvp failed");
+                exit(1);
+            }
+        }
+    }
+    return handle;
+}
 int main(int argl, char *argv[])
 {
     int succ = 0;
@@ -502,7 +537,10 @@ int main(int argl, char *argv[])
         char longopt;
         short exop = 0;
         char gzipstr[] = "gzip";
+        char gunzipstr[] = "gunzip";
         char *deflater[] = {gzipstr};
+        char *inflater[] = {gunzipstr};
+        char *extprog = NULL;
         int compresspid = 0;
         tar_simap_init(&tar_entry_date_map);
         for(int i = 1; i < optend; ++i)
@@ -652,9 +690,14 @@ int main(int argl, char *argv[])
                 optend = i;
         }
         if(target == NULL)
-            fh = op == EXTRACT ? stdin : stdout;
+            fh = op == EXTRACT || op == LIST ? stdin : stdout;
         else if(compress)
-            fh = sendto(deflater[compress - 1], target, &compresspid);
+        {
+            if(op == CREATE)
+                fh = sendto(extprog = deflater[compress - 1], target, &compresspid);
+            else
+                fh = recvfrom(extprog = inflater[compress - 1], target, &compresspid);
+        }
         else
             fh = fopen(target, openmode);
         if(dirtarget != NULL)
@@ -690,7 +733,7 @@ int main(int argl, char *argv[])
                 waitpid(compresspid, &status, 0);
                 status = WEXITSTATUS(status);
                 if(status != 0)
-                    fprintf(stderr, "%s exited with status %d\n", deflater[compress - 1], status);
+                    fprintf(stderr, "%s exited with status %d\n", extprog, status);
             }
         }
         tar_simap_free(&tar_entry_date_map);
