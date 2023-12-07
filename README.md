@@ -20,6 +20,8 @@ If the archive file is not specified, standard input will be used for extraction
 
 Long form options are available.
 
+When reading compressed archives, the -z option must also be specified, the program will not automatically detect.
+
 Options available are:
 ```
 -A -C -U -c -f -k -m -p -r -t -u -W -v -x -z

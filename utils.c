@@ -15,7 +15,16 @@ int tar_enumerate_headers_generic(void *restrict src, int(*reader)(void *restric
     {
         size = strtol(rhead.header.size, NULL, 8);
         skip = size + (-size & 0x1ff) - callback(arg, &rhead);
-        seeker(src, skip, SEEK_CUR);
+        if(seeker(src, skip, SEEK_CUR))
+        {
+            for(long cnt, tot= 0; tot < skip; tot += cnt)
+            {
+                cnt = TAR_HEADER_SIZE;
+                if(skip < tot + cnt)
+                    cnt = skip - tot;
+                cnt = reader(src, rhead.raw, cnt);
+            }
+        }
         succ = tar_read_generic(src, &rhead, reader);
     }
     return errno != 0;

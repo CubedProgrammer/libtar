@@ -13,9 +13,9 @@
 #include<utime.h>
 #include"tar.h"
 #include"str_int_map.h"
-#define MAJOR 0
-#define MINOR 9
-#define PATCH 3
+#define MAJOR 1
+#define MINOR 0
+#define PATCH 0
 #define EX_KEEP 1
 #define EX_SKIP 2
 #define EX_UPDATE 3
@@ -523,6 +523,8 @@ int main(int argl, char *argv[])
         puts("Documentation at https://man7.org/linux/man-pages/man1/tar.1.html");
         puts("If the archive file is not specified, the standard output is used.");
         puts("Or the standard input for extraction.");
+        puts("Compression method must be specified both when reading and writing.");
+        printf("Example: `%s -czf arch.tar` to create and `%s -xzf arch.tar` to extract.\n", argv[0], argv[0]);
     }
     else
     {
